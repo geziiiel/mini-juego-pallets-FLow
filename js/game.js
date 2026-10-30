@@ -568,7 +568,7 @@
         later(function () {
           card.classList.add('enter');
           later(function () { card.classList.remove('enter'); }, 640);
-        }, i * 115);
+        }, i * 300);
       });
 
       state.relayout = layoutMaterials;
@@ -589,8 +589,8 @@
       if (bin) bin.style.width = binW + 'px';
 
       const cols = small ? 2 : 3;
-      const cardW = small ? 98 : 124;
-      const cardH = small ? 94 : 132;
+      const cardW = small ? 118 : 149;
+      const cardH = small ? 113 : 158;
       const gap = small ? 7 : 12;
       const area = { x: 14, y: 14, w: W - binW - (small ? 36 : 72), h: H - 28 };
 
@@ -666,6 +666,9 @@
           'err'
         );
         return;
+      }
+      if (item.tool && state.tool !== item.tool) {
+        selectTool(item.tool);
       }
       if (!state.tool) {
         showToast('Elegí una herramienta del banco.', 'warn');
@@ -898,8 +901,8 @@
       const H = stage.clientHeight || 420;
       const small = W < 620;
       const cols = small ? 2 : 4;
-      const cardW = small ? 118 : 160;
-      const cardH = small ? 126 : 190;
+      const cardW = small ? 148 : 200;
+      const cardH = small ? 158 : 238;
       const gap = small ? 12 : 14;
       const area = { x: 16, y: 16, w: W - 32, h: H - 32 };
       layoutGrid(state.finishEls, cols, cardW, cardH, gap, area);
@@ -923,10 +926,12 @@
       return state.finishPieces.every(function (p) { return p.varnished; });
     }
 
-    function selectFinishTool(key) {
+    function selectFinishTool(key, auto) {
       if (key === 'brush' && !allSanded()) {
-        sfx('err');
-        showToast('Primero lijá todas las piezas. El barniz necesita una superficie suave.', 'warn');
+        if (!auto) {
+          sfx('err');
+          showToast('Primero lijá todas las piezas. El barniz necesita una superficie suave.', 'warn');
+        }
         return;
       }
       state.finishTool = key;
@@ -1130,7 +1135,7 @@
       const W = stage.clientWidth || 900;
       const H = stage.clientHeight || 420;
       const small = W < 620;
-      const size = small ? 72 : 104;
+      const size = small ? 86 : 125;
       const gap = small ? 10 : 14;
       const totalW = 4 * size + 3 * gap;
       const startX = (W - totalW) / 2;
