@@ -114,6 +114,30 @@
       } catch (e) { /* audio no disponible */ }
     }
 
+    function noiseBurst(dur, vol, hpFreq) {
+      if (state.muted || !actx) return;
+      try {
+        const rate = actx.sampleRate;
+        const len = Math.max(1, Math.floor(rate * dur));
+        const buf = actx.createBuffer(1, len, rate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+        }
+        const src = actx.createBufferSource();
+        src.buffer = buf;
+        const hp = actx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = hpFreq || 1800;
+        const gain = actx.createGain();
+        gain.gain.value = vol;
+        src.connect(hp);
+        hp.connect(gain);
+        gain.connect(actx.destination);
+        src.start();
+      } catch (e) { /* audio no disponible */ }
+    }
+
     function sfx(name) {
       ensureAudio();
       if (state.muted) return;
@@ -132,6 +156,23 @@
         case 'beep':
           tone(760, 0.1, 'square', 0.025);
           tone(760, 0.1, 'square', 0.025, 0.28);
+          break;
+        case 'reverse':
+          for (let i = 0; i < 5; i++) tone(1180, 0.085, 'square', 0.014, i * 0.42);
+          break;
+        case 'hiss': noiseBurst(0.42, 0.045, 2400); break;
+        case 'thud':
+          tone(84, 0.24, 'sine', 0.07);
+          tone(120, 0.16, 'sine', 0.035, 0.02);
+          noiseBurst(0.18, 0.028, 320);
+          break;
+        case 'gate':
+          tone(270, 0.08, 'square', 0.018);
+          tone(210, 0.11, 'square', 0.016, 0.09);
+          break;
+        case 'land':
+          tone(rand(160, 205), 0.1, 'triangle', 0.028);
+          noiseBurst(0.1, 0.035, 600);
           break;
         case 'pencil':
           tone(1100, 0.04, 'triangle', 0.02);
@@ -168,10 +209,233 @@
         if (!state.muted) {
           ensureAudio();
           sfx('click');
+          musicStart(0.9);
+        } else {
+          musicStop(true);
         }
       });
     }
     updateSoundBtn();
+
+    // ============================================================
+    // Música de fondo · lo-fi chill generada en vivo
+    // (sin archivos externos: pad + bajo + arpegio + percusión suave)
+    // ============================================================
+    const MUSIC = {
+      bpm: 74,
+      volume: 0.42,
+      playing: false,
+      timer: 0,
+      step: 0,
+      nextTime: 0,
+      master: null,
+      dry: null,
+      conv: null,
+      // Progresión I–vi–IV–V en Do: Cmaj7 · Am7 · Fmaj7 · G7
+      chords: [
+        { bass: 36, notes: [48, 52, 55, 59] },
+        { bass: 33, notes: [45, 48, 52, 55] },
+        { bass: 29, notes: [41, 45, 48, 52] },
+        { bass: 31, notes: [43, 47, 50, 53] }
+      ]
+    };
+
+    function midiToFreq(m) {
+      return 440 * Math.pow(2, (m - 69) / 12);
+    }
+
+    function makeImpulse(seconds, decay) {
+      const rate = actx.sampleRate;
+      const len = Math.max(1, Math.floor(rate * seconds));
+      const buf = actx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+        }
+      }
+      return buf;
+    }
+
+    function musicBus() {
+      if (MUSIC.master || !actx) return;
+      const master = actx.createGain();
+      master.gain.value = 0.0001;
+
+      const filter = actx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 2600;
+      filter.Q.value = 0.4;
+
+      const dry = actx.createGain();
+      dry.gain.value = 0.9;
+
+      const conv = actx.createConvolver();
+      conv.buffer = makeImpulse(2.4, 2.6);
+      const wet = actx.createGain();
+      wet.gain.value = 0.3;
+
+      dry.connect(filter);
+      filter.connect(master);
+      conv.connect(wet);
+      wet.connect(master);
+      master.connect(actx.destination);
+
+      MUSIC.master = master;
+      MUSIC.dry = dry;
+      MUSIC.conv = conv;
+    }
+
+    // Voz con envolvente suave + envío a reverb
+    function mVoice(freq, when, dur, type, vol, attack, send, detune) {
+      if (!actx || !MUSIC.dry) return;
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, when);
+      if (detune) osc.detune.setValueAtTime(detune, when);
+      const a = attack || 0.02;
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(vol, when + a);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      osc.connect(gain);
+      gain.connect(MUSIC.dry);
+      if (MUSIC.conv && send) {
+        const s = actx.createGain();
+        s.gain.value = send;
+        gain.connect(s);
+        s.connect(MUSIC.conv);
+      }
+      osc.start(when);
+      osc.stop(when + dur + 0.05);
+    }
+
+    function mNoise(when, dur, vol, freq) {
+      if (!actx || !MUSIC.dry) return;
+      const rate = actx.sampleRate;
+      const len = Math.max(1, Math.floor(rate * dur));
+      const buf = actx.createBuffer(1, len, rate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+      }
+      const src = actx.createBufferSource();
+      src.buffer = buf;
+      const hp = actx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = freq || 6000;
+      const gain = actx.createGain();
+      gain.gain.value = vol;
+      src.connect(hp);
+      hp.connect(gain);
+      gain.connect(MUSIC.dry);
+      src.start(when);
+    }
+
+    function mKick(when, vol) {
+      if (!actx || !MUSIC.dry) return;
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, when);
+      osc.frequency.exponentialRampToValueAtTime(44, when + 0.15);
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(vol, when + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.32);
+      osc.connect(gain);
+      gain.connect(MUSIC.dry);
+      osc.start(when);
+      osc.stop(when + 0.36);
+    }
+
+    // Planificador con lookahead: agenda corcheas por delante del reloj de audio
+    function musicSchedule() {
+      if (!MUSIC.playing || !actx) return;
+      const beat = 60 / MUSIC.bpm;
+      const eighth = beat / 2;
+      if (MUSIC.nextTime < actx.currentTime - 0.25) {
+        MUSIC.nextTime = actx.currentTime + 0.06;
+      }
+      while (MUSIC.nextTime < actx.currentTime + 0.8) {
+        const t = MUSIC.nextTime;
+        const inBar = MUSIC.step % 8;
+        const chord = MUSIC.chords[Math.floor(MUSIC.step / 8) % 4];
+
+        if (inBar === 0) {
+          // Pad sostenido + bajo del compás
+          chord.notes.forEach(function (n, i) {
+            mVoice(midiToFreq(n), t, beat * 3.7, 'triangle', 0.030, 0.45, 0.55, i % 2 ? 7 : -7);
+            mVoice(midiToFreq(n + 12), t, beat * 3.2, 'sine', 0.011, 0.8, 0.75);
+          });
+          mVoice(midiToFreq(chord.bass), t, beat * 1.6, 'sine', 0.085, 0.03, 0.12);
+          mVoice(midiToFreq(chord.bass), t + beat * 2, beat * 1.3, 'sine', 0.058, 0.03, 0.12);
+        }
+
+        // Arpegio de campanitas sobre las corcheas impares
+        if (inBar % 2 === 1 && Math.random() < 0.6) {
+          const n = chord.notes[(Math.random() * chord.notes.length) | 0] + 24;
+          mVoice(midiToFreq(n), t, 0.55, 'sine', 0.026, 0.008, 0.85);
+        }
+
+        // Percusión muy discreta
+        if (inBar === 0 || inBar === 4) mKick(t, 0.07);
+        if (inBar === 2 || inBar === 6) mNoise(t + eighth * 0.1, 0.09, 0.010, 7000);
+        if (inBar === 5 && Math.random() < 0.4) mNoise(t, 0.12, 0.008, 5200);
+
+        MUSIC.step++;
+        MUSIC.nextTime += eighth;
+      }
+    }
+
+    function musicStart(fadeSeconds) {
+      ensureAudio();
+      if (!actx || state.muted) return;
+      musicBus();
+      if (!MUSIC.master) return;
+      const now = actx.currentTime;
+      MUSIC.master.gain.cancelScheduledValues(now);
+      MUSIC.master.gain.setValueAtTime(Math.max(0.0001, MUSIC.master.gain.value), now);
+      MUSIC.master.gain.exponentialRampToValueAtTime(MUSIC.volume, now + (fadeSeconds || 2.4));
+      if (MUSIC.playing) return;
+      MUSIC.playing = true;
+      MUSIC.step = 0;
+      MUSIC.nextTime = now + 0.1;
+      clearInterval(MUSIC.timer);
+      MUSIC.timer = setInterval(musicSchedule, 180);
+      musicSchedule();
+    }
+
+    function musicStop(fast) {
+      if (MUSIC.timer) {
+        clearInterval(MUSIC.timer);
+        MUSIC.timer = 0;
+      }
+      MUSIC.playing = false;
+      if (!MUSIC.master || !actx) return;
+      const now = actx.currentTime;
+      MUSIC.master.gain.cancelScheduledValues(now);
+      MUSIC.master.gain.setValueAtTime(Math.max(0.0001, MUSIC.master.gain.value), now);
+      MUSIC.master.gain.exponentialRampToValueAtTime(0.0001, now + (fast ? 0.3 : 1.2));
+    }
+
+    // Al volver a la pestaña, retomar si estaba sonando
+    let musicWasPlaying = false;
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        musicWasPlaying = MUSIC.playing;
+        if (MUSIC.playing) musicStop(true);
+      } else if (musicWasPlaying && !state.muted) {
+        musicWasPlaying = false;
+        musicStart(1.2);
+      }
+    });
+
+    // Los navegadores suspenden el contexto: se reanuda con cualquier gesto
+    document.addEventListener('pointerdown', function () {
+      if (actx && actx.state === 'suspended' && !state.muted) {
+        actx.resume().catch(function () {});
+      }
+    }, { passive: true });
 
     // ============================================================
     // UI general
@@ -370,6 +634,34 @@
       return x * y > Math.min(ra.width * ra.height, rb.width * rb.height) * 0.12;
     }
 
+    function overlapArea(ra, rb) {
+      const x = Math.max(0, Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left));
+      const y = Math.max(0, Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top));
+      return x * y;
+    }
+
+    // Con el croquis armado como una mesa, dos huecos pueden tocarse:
+    // gana el que contiene el centro de la pieza y, si no, el de mayor solape.
+    function pickSlot(node) {
+      const nr = node.getBoundingClientRect();
+      const cx = nr.left + nr.width / 2;
+      const cy = nr.top + nr.height / 2;
+      let inside = null;
+      let best = null;
+      let bestArea = 0;
+
+      $$('.slot', stage).forEach(function (slot) {
+        if (slot.classList.contains('filled')) return;
+        const sr = slot.getBoundingClientRect();
+        const area = overlapArea(nr, sr);
+        if (area < Math.min(nr.width * nr.height, sr.width * sr.height) * 0.12) return;
+        if (!inside && cx >= sr.left && cx <= sr.right && cy >= sr.top && cy <= sr.bottom) inside = slot;
+        if (area > bestArea) { bestArea = area; best = slot; }
+      });
+
+      return inside || best;
+    }
+
     function layoutGrid(els, cols, cardW, cardH, gap, area) {
       const rows = Math.ceil(els.length / cols);
       const totalH = rows * cardH + (rows - 1) * gap;
@@ -392,6 +684,41 @@
     // ============================================================
     // PASO 1 · Descarga
     // ============================================================
+
+    // Lleva una pieza desde el camión hasta su lugar en la pila,
+    // con trayectoria curva, giro y rebote al aterrizar.
+    function flyPiece(originEl, slotEl, delayMs, durationMs) {
+      later(function () {
+        if (!originEl || !slotEl || !slotEl.animate) {
+          if (slotEl) slotEl.style.opacity = '1';
+          return;
+        }
+        const from = originEl.getBoundingClientRect();
+        const to = slotEl.getBoundingClientRect();
+        if (!from.width || !to.width) {
+          slotEl.style.opacity = '1';
+          return;
+        }
+        const dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+        const dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+        const dur = durationMs || 820;
+        const anim = slotEl.animate([
+          { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.5) rotate(-14deg)', opacity: 0, offset: 0, easing: 'cubic-bezier(.32,.62,.5,1)' },
+          { opacity: 1, offset: 0.1 },
+          { transform: 'translate(' + (dx * 0.45) + 'px,' + (dy * 0.32 - 58) + 'px) scale(.78) rotate(9deg)', opacity: 1, offset: 0.58, easing: 'cubic-bezier(.45,.05,.6,1)' },
+          { transform: 'translate(0px,-11px) scale(1.07) rotate(-4deg)', opacity: 1, offset: 0.88, easing: 'cubic-bezier(.25,.85,.4,1)' },
+          { transform: 'translate(0px,3px) scale(.99) rotate(1.5deg)', opacity: 1, offset: 0.95 },
+          { transform: 'translate(0px,0px) scale(1) rotate(0deg)', opacity: 1, offset: 1 }
+        ], { duration: dur, fill: 'both', easing: 'linear' });
+        anim.onfinish = function () {
+          slotEl.style.opacity = '1';
+          anim.cancel();
+        };
+        sfx('pick');
+        later(function () { sfx('land'); }, dur * 0.86);
+      }, delayMs);
+    }
+
     function loadStep1() {
       cleanStage();
       setStepUI(1);
@@ -407,11 +734,15 @@
             '<div class="truck truck-a">' +
               '<span class="beep">¡bip! ¡bip!</span>' +
               '<div class="truck-art">' + PalletsIcons.truck('pallet') + '</div>' +
+              '<span class="truck-smoke"><i></i><i></i><i></i></span>' +
+              '<span class="truck-dust"></span>' +
               '<span class="truck-label">Camión A · Pallets</span>' +
             '</div>' +
             '<div class="truck truck-b">' +
               '<span class="beep">¡bip! ¡bip!</span>' +
               '<div class="truck-art">' + PalletsIcons.truck('log') + '</div>' +
+              '<span class="truck-smoke"><i></i><i></i><i></i></span>' +
+              '<span class="truck-dust"></span>' +
               '<span class="truck-label">Camión B · Troncos</span>' +
             '</div>' +
           '</div>' +
@@ -432,12 +763,24 @@
       const skip = $('#skip-intro');
       const pileA = $('#pile-a');
       const pileB = $('#pile-b');
+      const truckA = $('.truck-a');
+      const truckB = $('.truck-b');
+
+      const settlePieces = function () {
+        $$('.pile-items span').forEach(function (slot) {
+          slot.getAnimations().forEach(function (a) { a.cancel(); });
+          slot.style.opacity = '1';
+          slot.style.transform = '';
+        });
+        $$('.truck-cargo').forEach(function (cargo) { cargo.style.opacity = '0'; });
+      };
 
       const finishIntro = function () {
         clearTimers();
         stage.classList.add('unloaded');
         pileA.classList.add('show');
         pileB.classList.add('show');
+        settlePieces();
         if (skip) skip.classList.add('hidden');
         setProgress(1, 1);
         setGuide('La madera ya está en recepción. Ahora revisá cada pieza y sacá los defectos.');
@@ -452,10 +795,30 @@
         });
       }
 
-      later(function () { sfx('beep'); }, 220);
-      later(function () { pileA.classList.add('show'); sfx('pop'); }, 1450);
-      later(function () { pileB.classList.add('show'); sfx('pop'); }, 1850);
-      later(finishIntro, 2650);
+      // Descarga: cada pieza sale de la caja del camión y aterriza en su pila
+      const unload = function (truck, pile, base) {
+        if (!truck || !pile) return;
+        const origin = $('.truck-anchor', truck) || $('.truck-art', truck) || truck;
+        const cargo = $('.truck-cargo', truck);
+        const slots = $$('.pile-items span', pile);
+        later(function () { pile.classList.add('show'); sfx('gate'); }, base - 240);
+        slots.forEach(function (slot, i) {
+          const at = base + i * 265;
+          flyPiece(origin, slot, at);
+          later(function () {
+            if (!cargo) return;
+            cargo.style.transition = 'opacity .4s ease';
+            cargo.style.opacity = String(Math.max(0, 1 - ((i + 1) / slots.length) * 1.2));
+          }, at + 110);
+        });
+      };
+
+      later(function () { sfx('reverse'); }, 300);
+      later(function () { sfx('hiss'); }, 2020);
+      later(function () { sfx('thud'); }, 2120);
+      unload(truckA, pileA, 2200);
+      unload(truckB, pileB, 3160);
+      later(finishIntro, 4720);
     }
 
     // ============================================================
@@ -1091,11 +1454,10 @@
       stage.classList.add('step-4');
       stage.innerHTML =
         '<div class="plan-board" id="plan-board">' +
-          '<div class="plan-ghost">' + PalletsIcons.table() + '</div>' +
-          '<div class="slot s0" data-slot="0">Tapa</div>' +
-          '<div class="slot s1" data-slot="1">Pata izq.</div>' +
-          '<div class="slot s2" data-slot="2">Estante</div>' +
-          '<div class="slot s3" data-slot="3">Pata der.</div>' +
+          '<div class="slot s0" data-slot="0"><span class="slot-name">Tapa</span></div>' +
+          '<div class="slot s1" data-slot="1"><span class="slot-name">Pata izq.</span></div>' +
+          '<div class="slot s2" data-slot="2"><span class="slot-name">Estante</span></div>' +
+          '<div class="slot s3" data-slot="3"><span class="slot-name">Pata der.</span></div>' +
         '</div>';
 
       const pieces = [
@@ -1124,8 +1486,9 @@
       layoutAssembly();
       state.relayout = layoutAssembly;
       state.onDragMove = function (node) {
+        const best = pickSlot(node);
         $$('.slot', stage).forEach(function (slot) {
-          slot.classList.toggle('hot', overlaps(node, slot) && !slot.classList.contains('filled'));
+          slot.classList.toggle('hot', slot === best);
         });
       };
     }
@@ -1153,12 +1516,8 @@
     }
 
     function handleAssemblyDrop(piece, node) {
-      const slots = $$('.slot', stage);
-      let target = null;
-      slots.forEach(function (slot) {
-        slot.classList.remove('hot');
-        if (overlaps(node, slot) && !slot.classList.contains('filled')) target = slot;
-      });
+      $$('.slot', stage).forEach(function (slot) { slot.classList.remove('hot'); });
+      const target = pickSlot(node);
 
       if (target && target.dataset.slot === piece.target) {
         target.classList.add('filled');
@@ -1167,10 +1526,12 @@
 
         const sr = stage.getBoundingClientRect();
         const tr = target.getBoundingClientRect();
-        node.style.transition = 'left .3s ease, top .3s ease, transform .3s ease';
+        node.style.transition = 'left .26s cubic-bezier(.3,.8,.4,1), top .26s cubic-bezier(.3,.8,.4,1), transform .26s ease, opacity .18s ease .1s';
         node.style.left = (tr.left - sr.left + tr.width / 2 - node.offsetWidth / 2) + 'px';
         node.style.top = (tr.top - sr.top + tr.height / 2 - node.offsetHeight / 2) + 'px';
-        node.style.transform = 'scale(.8)';
+        node.style.transform = 'scale(.62)';
+        node.style.opacity = '0';
+        later(function () { node.style.visibility = 'hidden'; }, 400);
 
         sfx('ok');
         state.align++;
@@ -1269,6 +1630,13 @@
       if (state.step !== 4) return;
       hideToast();
       setGuide('¡Mesa ensamblada! Cada tornillo quedó en su lugar y la estructura está firme.');
+      const tool = $('.phase-tool', stage);
+      if (tool) {
+        tool.style.transition = 'opacity .3s ease, transform .3s ease';
+        tool.style.opacity = '0';
+        tool.style.transform = 'scale(.9)';
+        later(function () { if (tool.parentNode) tool.parentNode.removeChild(tool); }, 340);
+      }
       stage.insertAdjacentHTML('beforeend',
         '<div class="build-done">' +
           '<h3>Mesa ensamblada</h3>' +
@@ -1370,6 +1738,7 @@
     $('#btn-start').addEventListener('click', function () {
       ensureAudio();
       sfx('click');
+      musicStart(2.6);
       showScreen('game');
       loadStep1();
     });

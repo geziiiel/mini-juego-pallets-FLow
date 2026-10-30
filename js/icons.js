@@ -195,9 +195,9 @@
     }
 
     function iconTruck(kind) {
-      const cargo = kind === 'pallet'
+      const cargo = '<g class="truck-cargo">' + (kind === 'pallet'
         ? '<g transform="translate(20 30) scale(.5)">' + palletMini() + '</g>'
-        : '<g transform="translate(24 36) scale(.6)">' + logMini() + '</g>';
+        : '<g transform="translate(24 36) scale(.6)">' + logMini() + '</g>') + '</g>';
       return svg(
         '<defs>' +
           '<linearGradient id="truckBed" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + W.dd + '"/><stop offset="1" stop-color="' + W.deep + '"/></linearGradient>' +
@@ -233,14 +233,14 @@
         // tail light
         '<rect x="90" y="44" width="3" height="6" rx="1" fill="' + W.rust + '"/>' +
         // wheels
-        '<g>' +
+        '<g class="wheel">' +
           '<circle cx="30" cy="60" r="9" fill="' + W.ink + '"/>' +
           '<circle cx="30" cy="60" r="6" fill="' + W.steelDark + '"/>' +
           '<circle cx="30" cy="60" r="3.2" fill="' + W.steel + '"/>' +
           '<circle cx="30" cy="60" r="1.2" fill="' + W.cream + '"/>' +
           '<path d="M30 52 v16 M22 60 h16 M24.4 54.4 l11.2 11.2 M35.6 54.4 l-11.2 11.2" stroke="' + W.steel + '" stroke-width="0.8" opacity=".7"/>' +
         '</g>' +
-        '<g>' +
+        '<g class="wheel">' +
           '<circle cx="96" cy="60" r="9" fill="' + W.ink + '"/>' +
           '<circle cx="96" cy="60" r="6" fill="' + W.steelDark + '"/>' +
           '<circle cx="96" cy="60" r="3.2" fill="' + W.steel + '"/>' +
@@ -250,6 +250,7 @@
         // mudflaps
         '<rect x="22" y="66" width="6" height="4" rx="1" fill="' + W.ink + '" opacity=".6"/>' +
         '<rect x="88" y="66" width="6" height="4" rx="1" fill="' + W.ink + '" opacity=".6"/>' +
+        '<circle class="truck-anchor" cx="36" cy="38" r="1" fill="none"/>' +
         cargo +
       '',
       '0 0 128 76'
