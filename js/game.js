@@ -270,7 +270,7 @@
       state.onDragMove = null;
       state.relayout = null;
       state.hoverPiece = null;
-      $$('.dust, .spark').forEach(function (n) { n.remove(); });
+      $$('.dust, .spark, .trail').forEach(function (n) { n.remove(); });
     }
 
     // ============================================================
@@ -525,7 +525,7 @@
           '<span class="bin-sub">vuelve a biomasa</span>' +
         '</div>';
 
-      state.items.forEach(function (item) {
+      state.items.forEach(function (item, idx) {
         const card = document.createElement('div');
         card.className = 'material';
         card.dataset.id = item.id;
@@ -559,6 +559,17 @@
 
       selectTool('pliers');
       layoutMaterials();
+
+      state.itemEls.forEach(function (card, i) {
+        const side = i % 3;
+        card.style.setProperty('--enter-x', side === 0 ? '-110px' : side === 1 ? '110px' : '0px');
+        card.style.setProperty('--enter-y', side === 2 ? '-120px' : '-50px');
+        card.style.setProperty('--enter-r', side === 0 ? '-12deg' : side === 1 ? '12deg' : '-6deg');
+        later(function () {
+          card.classList.add('enter');
+          later(function () { card.classList.remove('enter'); }, 640);
+        }, i * 115);
+      });
 
       state.relayout = layoutMaterials;
       state.onDragMove = function (node) {
@@ -602,12 +613,41 @@
       $$('.tool-btn', dock).forEach(function (btn) {
         btn.classList.toggle('active', btn.dataset.tool === key);
       });
+
+      dock.classList.remove('pulse');
+      void dock.offsetWidth;
+      dock.classList.add('pulse');
+      later(function () { dock.classList.remove('pulse'); }, 430);
+
+      const activeBtn = $('.tool-btn.active', dock);
+      if (activeBtn) {
+        activeBtn.classList.remove('pulse');
+        void activeBtn.offsetWidth;
+        activeBtn.classList.add('pulse');
+        later(function () { activeBtn.classList.remove('pulse'); }, 430);
+      }
+
       state.items.forEach(function (item) {
         if (item.el) {
-          item.el.classList.toggle('needs-tool', !item.resolved && item.tool === key);
+          const needs = !item.resolved && item.tool === key;
+          item.el.classList.toggle('needs-tool', needs);
+          if (needs) {
+            item.el.classList.remove('pulse');
+            void item.el.offsetWidth;
+            item.el.classList.add('pulse');
+            later(function () { if (item.el) item.el.classList.remove('pulse'); }, 430);
+          }
         }
       });
       sfx('pick');
+    }
+
+    function shakeItem(el) {
+      if (!el) return;
+      el.classList.remove('shake', 'flash');
+      void el.offsetWidth;
+      el.classList.add('shake', 'flash');
+      later(function () { if (el) el.classList.remove('shake', 'flash'); }, 480);
     }
 
     function handleItemTap(item) {
@@ -618,6 +658,7 @@
       }
       if (item.defect === 'broken' || item.defect === 'crooked') {
         sfx('err');
+        shakeItem(item.el);
         showToast(
           item.defect === 'broken'
             ? 'Este tablón está partido: arrastralo al contenedor de descarte.'
@@ -632,6 +673,7 @@
       }
       if (state.tool !== item.tool) {
         sfx('err');
+        shakeItem(item.el);
         const hint =
           item.defect === 'nails' ? 'Para los clavos usá la tenaza.' :
           item.defect === 'branches' ? 'Para las ramas usá la podadora.' :
@@ -659,9 +701,15 @@
     function resolveItem(item) {
       item.resolved = true;
       item.defect = null;
-      item.el.dataset.locked = '1';
+      if (item.el) {
+        item.el.dataset.locked = '1';
+        item.el.classList.add('resolving');
+        item.el.classList.remove('needs-tool');
+        burstAt(item.el, 'spark', 9);
+        burstAt(item.el, 'dust', 6);
+        later(function () { if (item.el) item.el.classList.remove('resolving'); }, 520);
+      }
       item.el.classList.add('resolved');
-      item.el.classList.remove('needs-tool');
       renderItem(item);
       state.resolved++;
       sfx('ok');
@@ -691,13 +739,44 @@
     function discardItem(item, node, bin) {
       item.resolved = true;
       node.dataset.locked = '1';
-      node.classList.add('discarded');
+      node.classList.add('discarding');
+      node.classList.remove('needs-tool');
 
-      const br = bin.getBoundingClientRect();
       const sr = stage.getBoundingClientRect();
-      node.style.transition = 'left .3s ease, top .3s ease, transform .3s ease, opacity .3s ease';
+      const nr = node.getBoundingClientRect();
+      const br = bin.getBoundingClientRect();
+      const startX = nr.left - sr.left + nr.width / 2;
+      const startY = nr.top - sr.top + nr.height / 2;
+      const endX = br.left - sr.left + br.width / 2;
+      const endY = br.top - sr.top + br.height / 2;
+
+      for (let i = 0; i < 6; i++) {
+        const frac = i / 6;
+        const trail = document.createElement('span');
+        trail.className = 'trail';
+        trail.style.left = (startX + (endX - startX) * frac - 6) + 'px';
+        trail.style.top = (startY + (endY - startY) * frac - 6) + 'px';
+        trail.style.opacity = String(0.9 - frac * 0.65);
+        stage.appendChild(trail);
+        later(function () {
+          trail.style.opacity = '0';
+          trail.style.transform = 'scale(0.3)';
+        }, 120 + i * 40);
+        later(function () { trail.remove(); }, 520 + i * 40);
+      }
+
+      node.style.transition = 'left .45s cubic-bezier(.4, 0, .2, 1), top .45s cubic-bezier(.4, 0, .2, 1), transform .45s cubic-bezier(.4, 0, .2, 1), opacity .35s ease .1s';
       node.style.left = (br.left - sr.left + br.width / 2 - node.offsetWidth / 2) + 'px';
       node.style.top = (br.top - sr.top + br.height / 2 - node.offsetHeight / 2) + 'px';
+      node.style.transform = 'rotate(720deg) scale(0.08)';
+      node.style.opacity = '0';
+
+      bin.classList.remove('hot');
+      bin.classList.remove('impact');
+      void bin.offsetWidth;
+      bin.classList.add('impact');
+      later(function () { bin.classList.remove('impact'); }, 460);
+      later(function () { node.classList.remove('discarding'); node.classList.add('discarded'); }, 470);
 
       state.resolved++;
       state.discarded++;
