@@ -3,11 +3,180 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flujo de Reciclado</title>
+  <title>Del Pallet al Mueble · Taller de reciclaje</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="root">
-    /*__APP_SCRIPT__*/
+
+  <div class="wall-bg" aria-hidden="true"></div>
+
+  <div class="string-lights" aria-hidden="true">
+    <span class="bulb" style="left:4%; animation-delay:0s"></span>
+    <span class="bulb" style="left:18%; animation-delay:.6s"></span>
+    <span class="bulb" style="left:33%; animation-delay:1.1s"></span>
+    <span class="bulb" style="left:48%; animation-delay:.3s"></span>
+    <span class="bulb" style="left:63%; animation-delay:1.5s"></span>
+    <span class="bulb" style="left:78%; animation-delay:.8s"></span>
+    <span class="bulb" style="left:93%; animation-delay:1.9s"></span>
   </div>
+
+  <div id="toast" class="toast warn" role="status" aria-live="polite"></div>
+
+  <!-- ================= INICIO ================= -->
+  <section id="screen-start" class="screen active">
+    <div class="hanging left" aria-hidden="true">
+      <div class="tool-hang">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+          <path d="M8 28 40 15l-5 11-27 8z"/><path d="M10 32l2 3 2-4 2 3 2-4 2 3 2-4 2 3 2-4 2 3 2-4 2 3"/>
+        </svg>
+      </div>
+      <div class="tool-hang">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M24 13v28"/><path d="M14 13h20"/><path d="M14 13v7h20v-7"/>
+        </svg>
+      </div>
+    </div>
+    <div class="hanging right" aria-hidden="true">
+      <div class="tool-hang">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 34 30 10l8 5-16 24z"/><path d="M14 34l-4 7 8-2"/><path d="M30 10l4-5 5 3-1 7"/>
+        </svg>
+      </div>
+      <div class="tool-hang">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+          <rect x="9" y="16" width="30" height="18" rx="3"/><path d="M14 22v6M20 22v6M26 22v6M32 22v6"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="start-wrap">
+      <div class="start-sign">
+        <span class="sign-nail left" aria-hidden="true"></span>
+        <span class="sign-nail right" aria-hidden="true"></span>
+        <span class="eyebrow">Taller de carpintería</span>
+        <h1>Del Pallet<em>al Mueble</em></h1>
+        <p class="start-lead">Transformá pallets y troncos recuperados en una mesa ratona. Recorré el taller paso a paso y descubrí cómo la madera vuelve a vivir.</p>
+
+        <div class="start-chips">
+          <div class="start-chip"><span class="n">01</span><strong>Recepción</strong><span>Llega la madera.</span></div>
+          <div class="start-chip"><span class="n">02</span><strong>Selección</strong><span>Sacá defectos.</span></div>
+          <div class="start-chip"><span class="n">03</span><strong>Acabado</strong><span>Lijá y barnizá.</span></div>
+          <div class="start-chip"><span class="n">04</span><strong>Ensamble</strong><span>Armá tu mesa.</span></div>
+        </div>
+
+        <button id="btn-start" class="btn btn-primary" type="button">Entrar al taller <span aria-hidden="true">→</span></button>
+      </div>
+      <p class="start-foot">Pallets Flow · Carpintería circular</p>
+    </div>
+  </section>
+
+  <!-- ================= JUEGO ================= -->
+  <section id="screen-game" class="screen hidden">
+    <header class="hud">
+      <div class="hud-brand">
+        <svg viewBox="0 0 64 64" role="img" aria-label="Pallets Flow">
+          <g stroke="#1A1A1A" stroke-width="2.5" stroke-linejoin="round">
+            <rect x="6" y="15" width="52" height="7" rx="1.5" fill="#C9A27C"/>
+            <rect x="6" y="25" width="52" height="7" rx="1.5" fill="#A87C52"/>
+            <rect x="9" y="35" width="10" height="12" rx="1.5" fill="#8A6239"/>
+            <rect x="27" y="35" width="10" height="12" rx="1.5" fill="#6B4A2A"/>
+            <rect x="45" y="35" width="10" height="12" rx="1.5" fill="#8A6239"/>
+            <rect x="6" y="50" width="52" height="7" rx="1.5" fill="#C9A27C"/>
+          </g>
+          <path d="M44 11 C54 11 59 6 59 3 C48 3 43 6 42 11 Z" fill="#4A7C59" stroke="#1A1A1A" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+        <span class="hud-title">Del Pallet <em>al Mueble</em></span>
+      </div>
+
+      <nav class="hud-steps" id="hud-steps" aria-label="Etapas del taller">
+        <div class="hud-step" data-step="1"><span class="dot">01</span><span class="lbl">Recepción</span></div>
+        <div class="hud-step" data-step="2"><span class="dot">02</span><span class="lbl">Selección</span></div>
+        <div class="hud-step" data-step="3"><span class="dot">03</span><span class="lbl">Acabado</span></div>
+        <div class="hud-step" data-step="4"><span class="dot">04</span><span class="lbl">Ensamble</span></div>
+      </nav>
+
+      <div class="hud-actions">
+        <button id="sound-toggle" class="icon-btn" type="button" aria-label="Activar o silenciar sonido" title="Sonido">
+          <span class="on" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>
+            </svg>
+          </span>
+          <span class="off" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 6 6m0-6-6 6"/>
+            </svg>
+          </span>
+        </button>
+        <button id="btn-exit" class="icon-btn" type="button" aria-label="Salir al inicio" title="Salir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="scene">
+      <div class="scene-head">
+        <div>
+          <span class="eyebrow" id="step-kicker">Estación 1</span>
+          <h2 id="step-title">Llegada al taller</h2>
+        </div>
+        <span class="phase-chip" id="phase-chip">Descarga</span>
+      </div>
+
+      <div class="guide">
+        <span class="guide-tag">Objetivo</span>
+        <p id="guide-text">Los camiones descargan la madera recuperada en la zona de recepción.</p>
+      </div>
+
+      <div class="progress-row">
+        <div class="progress"><span id="progress-fill"></span></div>
+        <span class="progress-label" id="progress-label">0 / 0</span>
+      </div>
+
+      <div id="stage" class="stage" aria-live="polite"></div>
+
+      <div id="dock" class="dock hidden" aria-label="Herramientas"></div>
+
+      <div class="scene-footer">
+        <button id="btn-next" class="btn btn-primary hidden" type="button">Continuar <span aria-hidden="true">→</span></button>
+      </div>
+    </main>
+  </section>
+
+  <!-- ================= FINAL ================= -->
+  <section id="screen-end" class="screen hidden">
+    <div class="end-wrap">
+      <div class="end-visual">
+        <div class="end-glow" aria-hidden="true"></div>
+        <div id="end-table" class="end-table-art" aria-hidden="true"></div>
+      </div>
+
+      <div class="end-card">
+        <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+        <span class="eyebrow">Proyecto terminado</span>
+        <h2>Mesa ratona <em>terminada</em></h2>
+        <p>Con madera recuperada, trabajo paciente y las herramientas justas, la madera vuelve a tener una historia. Reciclar también es crear.</p>
+
+        <div class="end-stats">
+          <div class="end-stat"><strong id="stat-reused">4</strong><span>piezas reutilizadas</span></div>
+          <div class="end-stat"><strong id="stat-discarded">2</strong><span>piezas a biomasa</span></div>
+          <div class="end-stat"><strong>0</strong><span>árboles talados</span></div>
+        </div>
+
+        <button id="btn-restart" class="btn btn-primary" type="button">Armar otra mesa</button>
+        <p class="end-note">Pallets Flow · Carpintería circular</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/icons.js"></script>
+  <script src="js/game.js"></script>
 </body>
 </html>
